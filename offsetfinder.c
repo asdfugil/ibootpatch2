@@ -406,64 +406,6 @@ static uint32_t* find_last_insn_matching_64(uint64_t region, uint8_t* kdata, siz
     return NULL;
 }
 
-
-uint64_t find_printf(uint64_t region, uint8_t* data, size_t size)
-{
-    uint8_t* str = memmem(data, size, "Entering recovery mode, starting command prompt\n", sizeof("Entering recovery mode, starting command prompt\n"));
-    if(!str)
-        return 0;
-    
-    // Find a reference to the string.
-    uint32_t* ref = find_literal_ref_64(region, data, size, (uint32_t*)data, (uintptr_t)str - (uintptr_t)data);
-    if (!ref)
-        return 0;
-    
-    // find BL
-    uint32_t *bl_addr = find_next_insn_matching_64(region, data, size, ref, insn_is_bl_64);
-    if (!bl_addr)
-        return 0;
-    
-    
-    return ((uintptr_t)bl_addr - (uintptr_t)data) + insn_bl_imm32_64(bl_addr);
-}
-
-uint64_t find_mount_and_boot_system(uint64_t region, uint8_t* data, size_t size)
-{
-    if(!region)
-        return 0;
-    
-    uint64_t maxsize = region + size;
-    uint64_t search[1];
-    
-    uint8_t* str = memmem(data, size, "fsboot", sizeof("fsboot"));
-    if(!str)
-        return 0;
-    
-    uint64_t addr = ((uintptr_t)str - (uintptr_t)data) + region;
-    if(maxsize < addr)
-        return 0;
-    
-    search[0] = addr;
-    uint8_t* ptr = memmem(data, size, search, sizeof(search));
-    if(!ptr)
-        return 0;
-    
-    uint64_t offset = ((uintptr_t)ptr - (uintptr_t)data) + 8;
-    if(size < offset)
-        return 0;
-    
-    uint64_t* dq = (uint64_t*)(data + offset);
-    if(!dq)
-        return 0;
-    
-    if(dq[0] < region)
-        return 0;
-    
-    uint64_t ret = dq[0] - region;
-    
-    return ret;
-}
-
 uint64_t find_check_bootmode(uint64_t region, uint8_t* data, size_t size)
 {
     uint8_t* str = memmem(data, size, "debug-uarts", sizeof("debug-uarts"));
@@ -483,190 +425,6 @@ uint64_t find_check_bootmode(uint64_t region, uint8_t* data, size_t size)
     return ((uintptr_t)bl_addr - (uintptr_t)data) + insn_bl_imm32_64(bl_addr);
 }
 
-
-uint64_t find_fuse_lock(uint64_t region, uint8_t* data, size_t size)
-{
-    
-    uint32_t matches_variant[] = {
-        0xf2800008,
-        0xb9400109,
-        0x32010129,
-        0xb9000109,
-        0xd5033f9f,
-    };
-    uint32_t masks_variant[] = {
-        0xff80001f,
-        0xffffffff,
-        0xffffffff,
-        0xffffffff,
-        0xffffffff,
-    };
-    
-    uint32_t* ref = find_insn_maskmatch_match(data, size, matches_variant, masks_variant, sizeof(matches_variant)/sizeof(uint32_t));
-    if(!ref)
-        return 0;
-    
-    uint32_t* cbz = find_last_insn_matching_64(region, data, size, ref, insn_is_cbz_w32);
-    if(!cbz)
-        return 0;
-    
-    return (uintptr_t)cbz - (uintptr_t)data;
-}
-
-uint64_t find_get_fuse_lock(uint64_t region, uint8_t* data, size_t size)
-{
-    
-    uint32_t matches_variant[] = {
-        0x92800008,
-        0xf2800008,
-        0xf2800008,
-        0xb9400108,
-        0x531f7d00,
-        0xd65f03c0,
-    };
-    uint32_t masks_variant[] = {
-        0x9f80000f,
-        0xff80001f,
-        0xff80001f,
-        0xffffffff,
-        0xffffffff,
-        0xffffffff,
-    };
-    
-    uint32_t* ref = find_insn_maskmatch_match(data, size, matches_variant, masks_variant, sizeof(matches_variant)/sizeof(uint32_t));
-    if(!ref)
-        return 0;
-    
-    return (uintptr_t)ref - (uintptr_t)data;
-}
-
-uint64_t find_jumpto_bl(uint64_t region, uint8_t* data, size_t size)
-{
-    uint32_t search[2];
-    
-    uint8_t* str = memmem(data, size, "======== End of %s serial output. ========\n", sizeof("======== End of %s serial output. ========\n"));
-    if(!str)
-        return 0;
-    
-    // Find a reference to the string.
-    uint32_t* ref = find_literal_ref_64(region, data, size, (uint32_t*)data, (uintptr_t)str - (uintptr_t)data);
-    if (!ref)
-        return 0;
-    
-    search[0] = 0xaa1403e0; // mov x0, x20
-    search[1] = 0xaa1303e1; // mov x1, x19
-    
-    uint32_t* jump = memmem(ref, size - ((uintptr_t)ref - (uintptr_t)data), search, sizeof(search));
-    if (!jump)
-        return 0;
-    
-    uint32_t *bl_addr = find_next_insn_matching_64(region, data, size, jump, insn_is_bl_64);
-    if (!bl_addr)
-        return 0;
-    
-    return ((uintptr_t)bl_addr - (uintptr_t)data);
-}
-
-uint64_t find_jumpto_func(uint64_t region, uint8_t* data, size_t size)
-{
-    uint32_t search[2];
-
-    uint8_t* str = memmem(data, size, "======== End of %s serial output. ========\n", sizeof("======== End of %s serial output. ========\n"));
-    if(!str)
-        return 0;
-
-    // Find a reference to the string.
-    uint32_t* ref = find_literal_ref_64(region, data, size, (uint32_t*)data, (uintptr_t)str - (uintptr_t)data);
-    if (!ref)
-        return 0;
-
-    search[0] = 0xaa1403e0; // mov x0, x20
-    search[1] = 0xaa1303e1; // mov x1, x19
-
-    uint32_t* jump = memmem(ref, size - ((uintptr_t)ref - (uintptr_t)data), search, sizeof(search));
-    if (!jump)
-        return 0;
-
-    uint32_t *bl_addr = find_next_insn_matching_64(region, data, size, jump, insn_is_bl_64);
-    if (!bl_addr)
-        return 0;
-
-    return ((uintptr_t)bl_addr - (uintptr_t)data) + insn_bl_imm32_64(bl_addr);
-}
-
-uint64_t find_debug_enabled(uint64_t region, uint8_t* data, size_t size)
-{
-    uint8_t* str = memmem(data, size, "debug-enabled", sizeof("debug-enabled"));
-    if(!str)
-        return 0;
-    
-    // Find a reference to the string.
-    uint32_t* ref = find_literal_ref_64(region, data, size, (uint32_t*)data, (uintptr_t)str - (uintptr_t)data);
-    if (!ref)
-        return 0;
-    
-    // find 3rd-BL
-    uint32_t *bl_addr = find_insn_matching_64_with_count(region, data, size, ref, insn_is_bl_64, 1);
-    if (!bl_addr)
-        return 0;
-    
-    return ((uintptr_t)bl_addr - (uintptr_t)data);
-}
-
-uint64_t find_bootargs_nop(uint64_t region, uint8_t* data, size_t size)
-{
-    uint8_t* str = memmem(data, size, " -restore", sizeof(" -restore"));
-    if(!str)
-        return 0;
-    
-    // Find a reference to the string.
-    uint32_t* ref = find_literal_ref_64(region, data, size, (uint32_t*)data, (uintptr_t)str - (uintptr_t)data);
-    if (!ref)
-        return 0;
-    
-    // find 1st B
-    uint32_t *bl_addr = find_next_insn_matching_64(region, data, size, ref, insn_is_b_unconditional_64);
-    if (!bl_addr)
-        return 0;
-    
-    bl_addr += insn_bl_imm32_64(bl_addr)/sizeof(uint32_t);
-    
-    // find 1st NOP
-    uint32_t *nop_addr = find_next_insn_matching_64(region, data, size, bl_addr, insn_nop_64);
-    if (!nop_addr)
-        return 0;
-    
-    return ((uintptr_t)nop_addr - (uintptr_t)data);
-}
-
-uint64_t find_bootargs_adr(uint64_t region, uint8_t* data, size_t size)
-{
-    uint8_t* str = memmem(data, size, " -restore", sizeof(" -restore"));
-    if(!str)
-        return 0;
-    
-    // Find a reference to the string.
-    uint32_t* ref = find_literal_ref_64(region, data, size, (uint32_t*)data, (uintptr_t)str - (uintptr_t)data);
-    if (!ref)
-        return 0;
-    
-    // find 1st B
-    uint32_t *bl_addr = find_next_insn_matching_64(region, data, size, ref, insn_is_b_unconditional_64);
-    if (!bl_addr)
-        return 0;
-    
-    bl_addr += insn_bl_imm32_64(bl_addr)/sizeof(uint32_t);
-    
-    // find 1st NOP
-    uint32_t *nop_addr = find_next_insn_matching_64(region, data, size, bl_addr, insn_nop_64);
-    if (!nop_addr)
-        return 0;
-    
-    nop_addr--;
-    
-    return ((uintptr_t)nop_addr - (uintptr_t)data) + insn_adr_imm_64(nop_addr);
-}
-
 uint64_t find_zero(uint64_t region, uint8_t* data, size_t size)
 {
     unsigned char zeroBuf[a10_a11rxw_bin_len + go_cmd_hook_bin_len + tram_bin_len];
@@ -683,110 +441,6 @@ uint64_t find_zero(uint64_t region, uint8_t* data, size_t size)
     return address;
 }
 
-
-uint64_t find_bootx_str(uint64_t region, uint8_t* data, size_t size)
-{
-    if(!region)
-        return 0;
-    
-    uint8_t* str = memmem(data, size, "bootx", sizeof("bootx"));
-    if(!str)
-        return 0;
-    
-    return (uintptr_t)str - (uintptr_t)data;
-}
-
-uint64_t find_go_str(uint64_t region, uint8_t* data, size_t size)
-{
-    if(!region)
-        return 0;
-    
-    uint8_t* str = memmem(data, size, "go", sizeof("go"));
-    if(!str)
-        return 0;
-    
-    return (uintptr_t)str - (uintptr_t)data;
-}
-
-uint64_t find_bootx_cmd_handler(uint64_t region, uint8_t* data, size_t size)
-{
-    uint64_t str = find_bootx_str(region, data, size);
-    if(!str)
-        return 0;
-    
-    uint64_t maxsize = region + size;
-    uint64_t search[1];
-    
-    uint64_t addr = str + region;
-    if(maxsize < addr)
-        return 0;
-    
-    search[0] = addr;
-    uint8_t* ptr = memmem(data, size, search, sizeof(search));
-    if(!ptr)
-        return 0;
-    
-    return ((uintptr_t)ptr - (uintptr_t)data) + 8;
-}
-
-uint64_t find_go_cmd_handler(uint64_t region, uint8_t* data, size_t size)
-{
-    uint64_t str = find_go_str(region, data, size);
-    if(!str)
-        return 0;
-    
-    uint64_t maxsize = region + size;
-    uint64_t search[1];
-
-    uint64_t addr = str + region;
-    if(maxsize < addr)
-        return 0;
-    
-    search[0] = addr;
-    uint8_t* ptr = memmem(data, size, search, sizeof(search));
-    if(!ptr) {
-        uint8_t* str2 = memmem(data, size, "go", sizeof("go"));
-        uint8_t* str3 = memmem(str2 + 2, size - (str2 - data) - 2, "go", sizeof("go"));
-        if(!str3)
-            return 0;
-        
-        addr = (uintptr_t)str3 - (uintptr_t)data + region;
-        if(maxsize < addr)
-            return 0;
-        
-        search[0] = addr;
-        ptr = memmem(data, size, search, sizeof(search));
-        if(!ptr)
-            return 0;
-    }
-    
-    return ((uintptr_t)ptr - (uintptr_t)data) + 8;
-}
-uint64_t find_panic(uint64_t region, uint8_t* data, size_t size)
-{
-    uint8_t* str = memmem(data, size, "unknown LPDDR4 density %d", sizeof("unknown LPDDR4 density %d"));
-    
-    if(!str)
-        str = memmem(data, size, "Failed to find adfe tunables info, bailing adfe_init()\n", sizeof("Failed to find adfe tunables info, bailing adfe_init()\n"));
-    
-    if(!str)
-        return 0;
-    
-    // Find a reference to the string.
-    uint32_t* ref = find_literal_ref_64(region, data, size, (uint32_t*)data, (uintptr_t)str - (uintptr_t)data);
-    if (!ref)
-        return 0;
-    
-    // find BL
-    uint32_t *bl_addr = find_next_insn_matching_64(region, data, size, ref, insn_is_bl_64);
-    if (!bl_addr)
-        return 0;
-    
-    
-    return ((uintptr_t)bl_addr - (uintptr_t)data) + insn_bl_imm32_64(bl_addr);
-}
-
-
 uint64_t find_kc(uint64_t region, uint8_t* data, size_t size)
 {
     uint8_t* str = memmem(data, size, "/System/Library/Caches/com.apple.kernelcaches/kernelcache", sizeof("/System/Library/Caches/com.apple.kernelcaches/kernelcache"));
@@ -796,6 +450,23 @@ uint64_t find_kc(uint64_t region, uint8_t* data, size_t size)
     return ((uintptr_t)str - (uintptr_t)data) + 0x38;
 }
 
+uint64_t find_dtre(uint64_t region, uint8_t* data, size_t size)
+{
+    uint8_t* str = memmem(data, size, "/usr/standalone/firmware/devicetree.img4", sizeof("/usr/standalone/firmware/devicetree.img4"));
+    if(!str)
+        return 0;
+    
+    return ((uintptr_t)str - (uintptr_t)data);
+}
+
+uint64_t find_avef(uint64_t region, uint8_t* data, size_t size)
+{
+    uint8_t* str = memmem(data, size, "AVE.img4", sizeof("AVE.img4"));
+    if(!str)
+        return 0;
+    
+    return ((uintptr_t)str - (uintptr_t)data);
+}
 
 uint32_t make_branch(uint64_t w, uint64_t a)
 {

@@ -18,24 +18,13 @@ VERSION = $(shell git rev-parse HEAD | tr -d '\n')-$(shell git rev-list --count 
 
 .PHONY: all clean
 
-all: payload.c
+all:
 	$(CC) $(SOURCE) $(ARCH) $(CFLAGS) -DVERSION=\"$(VERSION)\" -o $(BIN)
-	
+
 vmacho:
 	$(CC_FOR_BUILD) $(CFLAGS_FOR_BUILD) $(LDFLAGS_FOR_BUILD) -o vmacho vmacho.c
 
 clean:
 	-$(RM) $(BIN) *.bin *.o vmacho payload.c
-
-%.o:
-	$(AS_FOR_TARGET) $(ASFLAGS_FOR_TARGET) $*.S -o $*.o
-
-%.bin: %.o vmacho
-	./vmacho -f $*.o $*.bin
-
-payload.c: a10_a11rxw.bin go_cmd_hook.bin tram.bin
-	xxd -iC a10_a11rxw.bin >> payload.c
-	xxd -iC go_cmd_hook.bin >> payload.c
-	xxd -iC tram.bin >> payload.c
 
 .PHONY: all clean
