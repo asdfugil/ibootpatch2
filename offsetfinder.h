@@ -9,7 +9,6 @@ uint64_t find_zero_region(uint64_t region, uint8_t* data, size_t size);
 uint64_t find_printf(uint64_t region, uint8_t* data, size_t size);
 uint64_t find_check_bootmode(uint64_t region, uint8_t* data, size_t size);
 uint64_t find_bootargs_adr(uint64_t region, uint8_t* data, size_t size);
-uint64_t find_zero(uint64_t region, uint8_t* data, size_t size);
 uint64_t find_kc(uint64_t region, uint8_t* data, size_t size);
 uint64_t find_dtre(uint64_t region, uint8_t* data, size_t size);
 uint64_t find_avef(uint64_t region, uint8_t* data, size_t size);

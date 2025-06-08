@@ -2,7 +2,7 @@ CC		= cc
 CC_FOR_BUILD = cc
 AS_FOR_TARGET ?= as
 ASFLAGS_FOR_TARGET ?= -arch arm64 -nostdlib -static -ffreestanding
-SOURCE	= patch.c offsetfinder.c payload.c
+SOURCE	= patch.c offsetfinder.c
 
 UNAME  := $(shell uname)
 ifeq ($(UNAME), Darwin)

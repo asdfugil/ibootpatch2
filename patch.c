@@ -26,7 +26,6 @@
 #include <inttypes.h>
 
 #include "offsetfinder.h"
-#include "payload.h"
 
 #define LOG(x, ...) \
 do { \
