@@ -81,19 +81,29 @@ int open_file(char *file, size_t *sz, unsigned char **buf)
 
 void usage(const char *path)
 {
-    printf("%s 2<in> <out>\n", path);
+    printf("%s <in> <out> [--replace]\n", path);
     printf("Version: " VERSION "\n");
 }
 
 int main(int argc, char **argv)
 {
-    if(argc != 3) {
+    // honestly thinking about redoing this arg parsing in the future
+    // - crystall1nedev
+    if(argc < 3 ||
+       (argc >= 4 && strcmp(argv[3],"--replace") != 0) ||
+       (argc >= 5 && strcmp(argv[4],"--filenames") != 0)) {
         usage(argv[0]);
         return 0;
     }
     
     char *infile = argv[1];
     char *outfile = argv[2];
+    
+    int replaceSys = 0;
+    if(argc >= 4) { replaceSys = 1; }
+    
+    int enableFilenames = 0;
+    if(argc >= 5) { enableFilenames = 1; }
     
     unsigned char* idata;
     size_t isize;
@@ -107,13 +117,6 @@ int main(int argc, char **argv)
         if(!iboot_base)
             goto end;
         LOG("%016" PRIx64 "[%016" PRIx64 "]: iboot_base", iboot_base, (uint64_t)0x300);
-  
-        uint64_t kc_str = find_kc(iboot_base, idata, isize);
-        if(!kc_str) {
-            ERR("Failed to find kernelcache string");
-            goto end;
-        }
-        LOG("%016" PRIx64 "[%016" PRIx64 "]: kc_str", kc_str + iboot_base, kc_str);
         
         uint64_t check_bootmode = find_check_bootmode(iboot_base, idata, isize);
         if(!check_bootmode) {
@@ -121,21 +124,42 @@ int main(int argc, char **argv)
             goto end;
         }
         LOG("%016" PRIx64 "[%016" PRIx64 "]: check_bootmode", check_bootmode + iboot_base, check_bootmode);
-
+        
+        uint64_t check_system_volume_auth_blob = find_system_volume_auth_blob(iboot_base, idata, isize);
+        
+        uint64_t kc_str = find_kc(iboot_base, idata, isize);
         uint64_t dtre = find_dtre(iboot_base, idata, isize);
-        if(!dtre) {
-            ERR("Failed to find devicetree string");
-            goto end;
-        }
-        LOG("%016" PRIx64 "[%016" PRIx64 "]: dtre", dtre + iboot_base, dtre);
-
         uint64_t avef = find_avef(iboot_base, idata, isize);
-        if(!dtre) {
-            ERR("Failed to find AVE firmware string");
-            goto end;
+        
+        if(replaceSys) {
+            
+            if(!check_system_volume_auth_blob) {
+                ERR("Failed to find system_volume_auth_blob");
+                goto end;
+            }
+            LOG("%016" PRIx64 "[%016" PRIx64 "]: check_system_volume_auth_blob", check_system_volume_auth_blob + iboot_base, check_system_volume_auth_blob);
+            
         }
-        LOG("%016" PRIx64 "[%016" PRIx64 "]: avef", avef + iboot_base, avef);
-
+        
+        if(!replaceSys || enableFilenames) {
+            if(!kc_str) {
+                ERR("Failed to find kernelcache string");
+                goto end;
+            }
+            LOG("%016" PRIx64 "[%016" PRIx64 "]: kc_str", kc_str + iboot_base, kc_str);
+            if(!dtre) {
+                ERR("Failed to find devicetree string");
+                goto end;
+            }
+            LOG("%016" PRIx64 "[%016" PRIx64 "]: dtre", dtre + iboot_base, dtre);
+            
+            if(!dtre) {
+                ERR("Failed to find AVE firmware string");
+                goto end;
+            }
+            LOG("%016" PRIx64 "[%016" PRIx64 "]: avef", avef + iboot_base, avef);
+            
+        }
 
         /*---- patch part ----*/
         {
@@ -152,23 +176,34 @@ int main(int argc, char **argv)
             LOG("set bootmode=%d (%s)", bootmode, bootmode == 0 ? "LOCAL_BOOT" : "REMOTE_BOOT");
         }
         
-        {
-            uint8_t* patch_kc_str = (uint8_t*)(idata + kc_str);
-            patch_kc_str[0] = 'd';
-            LOG("kernelcache -> kernelcachd");
+        if(replaceSys) {
+            {
+                uint32_t* patch_system_volume_auth_blob = (uint32_t*)(idata + check_system_volume_auth_blob);
+                patch_system_volume_auth_blob[0] = INSN_NOP;
+                patch_system_volume_auth_blob[1] = INSN_NOP;
+                LOG("disabled system-volume-auth-blob verification");
+            }
         }
+        
+        if(!replaceSys || enableFilenames) {
+            {
+                uint8_t* patch_kc_str = (uint8_t*)(idata + kc_str);
+                patch_kc_str[0] = 'd';
+                LOG("kernelcache -> kernelcachd");
+            }
 
-        {
-            uint8_t* patch_avef_str = (uint8_t*)(idata + avef);
-            patch_avef_str[0] = 'E';
-            patch_avef_str[2] = 'A';
-            LOG("AVE.img4 -> EVA.img4");
-        }
+            {
+                uint8_t* patch_avef_str = (uint8_t*)(idata + avef);
+                patch_avef_str[0] = 'E';
+                patch_avef_str[2] = 'A';
+                LOG("AVE.img4 -> EVA.img4");
+            }
 
-        {
-            uint8_t* patch_dtre_str = (uint8_t*)(idata + dtre);
-            patch_dtre_str[34] = 'd';
-            LOG("devicetree.img4 -> devicetred.img4");
+            {
+                uint8_t* patch_dtre_str = (uint8_t*)(idata + dtre);
+                patch_dtre_str[34] = 'd';
+                LOG("devicetree.img4 -> devicetred.img4");
+            }
         }
     }
     

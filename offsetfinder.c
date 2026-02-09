@@ -424,6 +424,25 @@ uint64_t find_check_bootmode(uint64_t region, uint8_t* data, size_t size)
     return ((uintptr_t)bl_addr - (uintptr_t)data) + insn_bl_imm32_64(bl_addr);
 }
 
+uint64_t find_system_volume_auth_blob(uint64_t region, uint8_t* data, size_t size)
+{
+    uint8_t* str = memmem(data, size, "system-volume-auth-blob", sizeof("system-volume-auth-blob"));
+    if(!str)
+        return 0;
+    
+    // Find a reference to the string.
+    uint32_t* ref = find_literal_ref_64(region, data, size, (uint32_t*)data, (uintptr_t)str - (uintptr_t)data);
+    if (!ref)
+        return 0;
+    
+    // find 1st BL
+    uint32_t *bl_addr = find_insn_matching_64_with_count(region, data, size, ref, insn_is_bl_64, 0);
+    if (!bl_addr)
+        return 0;
+        
+    return (uintptr_t)bl_addr - (uintptr_t)data;
+}
+
 uint64_t find_kc(uint64_t region, uint8_t* data, size_t size)
 {
     uint8_t* str = memmem(data, size, "/System/Library/Caches/com.apple.kernelcaches/kernelcache", sizeof("/System/Library/Caches/com.apple.kernelcaches/kernelcache"));
