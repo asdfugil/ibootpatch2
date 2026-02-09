@@ -2,6 +2,7 @@
  * patch.c
  *
  * copyright (C) 2022/12/04 dora2ios
+ * copyright (C) 2026/02/08 crystall1nedev
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +19,7 @@
  *
  */
 
+#include <unistd.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
@@ -81,29 +83,31 @@ int open_file(char *file, size_t *sz, unsigned char **buf)
 
 void usage(const char *path)
 {
-    printf("%s <in> <out> [--replace]\n", path);
+    printf("%s [-RF] -i <in> -o <out>\n", path);
     printf("Version: " VERSION "\n");
 }
 
 int main(int argc, char **argv)
 {
-    // honestly thinking about redoing this arg parsing in the future
-    // - crystall1nedev
-    if(argc < 3 ||
-       (argc >= 4 && strcmp(argv[3],"--replace") != 0) ||
-       (argc >= 5 && strcmp(argv[4],"--filenames") != 0)) {
-        usage(argv[0]);
-        return 0;
-    }
-    
-    char *infile = argv[1];
-    char *outfile = argv[2];
-    
+    int option;
+    char *infile = NULL;
+    char *outfile = NULL;
     int replaceSys = 0;
-    if(argc >= 4) { replaceSys = 1; }
-    
     int enableFilenames = 0;
-    if(argc >= 5) { enableFilenames = 1; }
+
+    while ((option = getopt(argc, argv, "i:o:RF")) != -1) {
+        switch (option) {
+            // -i = input file
+            // -o = output file
+            // -R = "replace system", enable isys patch
+            // -F = "filenames", enable filename patching
+            case 'i': infile = optarg; break;
+            case 'o': outfile = optarg; break;
+            case 'R': replaceSys = 1; break;
+            case 'F': enableFilenames = 1; break;
+            default: break;
+        }
+    }
     
     unsigned char* idata;
     size_t isize;
